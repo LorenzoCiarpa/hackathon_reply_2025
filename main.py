@@ -6,7 +6,7 @@ from utils import compute_profit, compute_to_buy
 def main_loop(budget, resources_group, resources, turns, T):
 
 
-    f = open("output-attenborough-mod.txt", "w")
+    f = open("output-shiva-mod.txt", "w")
 
     green_resources = resources_group[0]
     base_resources = resources_group[1]
@@ -14,16 +14,36 @@ def main_loop(budget, resources_group, resources, turns, T):
 
     uuid = 0
 
+    tot_prof = 0
+
     resources_purchased = []
 
     for t in range(T):
 
+        effect_on_coverage = 100
+        effect_on_revenues = 100
+        effect_on_bounds = 100
+        effect_on_lifespan = 100
 
+        for res in resources_purchased:
+            if res['dead']:
+                continue
+            if res['active']:
+                if resources[res['RI']]['RT'] == 'A':
+                    effect_on_coverage += resources[res['RI']]['RE']
+                if resources[res['RI']]['RT'] == 'B':
+                    effect_on_bounds += resources[res['RI']]['RE']
+                if resources[res['RI']]['RT'] == 'C':
+                    effect_on_lifespan += resources[res['RI']]['RE']
+                if resources[res['RI']]['RT'] == 'D':
+                    effect_on_revenues += resources[res['RI']]['RE']
+
+        
         print("\nTurno", t)
 
-        T_m = turns[t][0] #Domanda minima
-        T_x = turns[t][1] #Domanda massima
-        T_r = turns[t][2] #Profitto per building
+        T_m = int(turns[t][0]*effect_on_bounds/100) #Domanda minima
+        T_x = int(turns[t][1]*effect_on_bounds/100) #Domanda massima
+        T_r = int(turns[t][2]*effect_on_revenues/100) #Profitto per building
 
         coverage = 0
         maintenance = 0
@@ -40,11 +60,11 @@ def main_loop(budget, resources_group, resources, turns, T):
             res['turn_status'] += 1
 
             if res['active']:
-                coverage += resources[res['RI']]['RU']
+                coverage += max(0, int(resources[res['RI']]['RU']*effect_on_coverage/100))
 
         if coverage >= T_m:
             # we have enough coverage
-            profit = compute_profit(coverage, T_x, T_r, maintenance)
+            # profit = compute_profit(coverage, T_x, T_r, maintenance)
 
             f.write(str(t) + " 0\n")
 
@@ -88,26 +108,45 @@ def main_loop(budget, resources_group, resources, turns, T):
                 for i, b in enumerate(B):
                     if b > 0:
                         for k in range(b):
+                            if full_list[i]['RT'] == 'C':
+                                effect_on_lifespan += full_list[i]['RE']
+
                             resources_purchased.append({
                                 'uuid': uuid,
                                 'RI': full_list[i]['RI'],
                                 'lifetime': 0,
+                                'lifespan': int(full_list[i]['RL']*effect_on_lifespan/100),
                                 'turn_status': 0,
                                 'active': True,
                                 'dead': False,
                             })
+
+                            if full_list[i]['RT'] == 'A':
+                                effect_on_coverage += full_list[i]['RE']
+                            if full_list[i]['RT'] == 'B':
+                                effect_on_bounds += full_list[i]['RE']
+                            if full_list[i]['RT'] == 'D':
+                                effect_on_revenues += full_list[i]['RE']
+                            
                             uuid += 1
 
                             stringozza += str(full_list[i]['RI']) + " "
 
-                        coverage += full_list[i]['RU'] * b
+                        coverage += max(0, int(full_list[i]['RU']*effect_on_coverage/100)) * b
                         purchasing_expenses += full_list[i]['RA'] * b
                         maintenance += full_list[i]['RP'] * b
+                
+                T_m = int(turns[t][0]*effect_on_bounds/100) #Domanda minima
+                T_x = int(turns[t][1]*effect_on_bounds/100) #Domanda massima
+                T_r = int(turns[t][2]*effect_on_revenues/100) #Profitto per building
 
-                profit = compute_profit(coverage, T_x, T_r, maintenance)
+                
 
                 f.write(stringozza + "\n")
 
+
+        profit = compute_profit(coverage, T_x, T_r, maintenance)
+        tot_prof += min(coverage, T_x)*T_r
 
         for res in resources_purchased:
             if res['dead']:
@@ -124,7 +163,7 @@ def main_loop(budget, resources_group, resources, turns, T):
             if res['lifetime'] == resources[res['RI']]['RL']:
                 res['dead'] = True
 
-        print(f"purchased: ", resources_purchased)
+        # print(f"purchased: ", resources_purchased)
         if failed:
             budget -= maintenance
         else:
@@ -134,6 +173,7 @@ def main_loop(budget, resources_group, resources, turns, T):
         print(f"Er budget è: {budget}")
 
         if t == T - 1:
+            print(tot_prof)
             f.close()
             
 
@@ -142,7 +182,7 @@ def main_loop(budget, resources_group, resources, turns, T):
 
 if __name__ == "__main__":
 
-    file_path = "./data/2-attenborough.txt"
+    file_path = "./data/8-shiva.txt"
     D, R, T, resources, turns = read_input_file(file_path)
 
     # Stampa per verifica

@@ -23,8 +23,8 @@ def compute_to_buy(budget, T_m, eff, RA, RU):
     x = model.addVars(R, vtype=GRB.INTEGER, name="x")
 
     # Set objective: Maximize sum(eff_r * x_r)
-    # model.setObjective(sum(eff[r] * x[r] for r in R), GRB.MAXIMIZE)
-    model.setObjective(sum(RA[r] * x[r] for r in R), GRB.MINIMIZE)
+    model.setObjective(sum(eff[r] * x[r] for r in R), GRB.MAXIMIZE)
+    # model.setObjective(sum(RA[r] * x[r] for r in R), GRB.MINIMIZE)
 
     # Constraints
     model.addConstr(sum(x[r] * RA[r] for r in R) <= budget, "BudgetConstraint")
