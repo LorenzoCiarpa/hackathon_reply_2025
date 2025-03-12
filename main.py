@@ -5,6 +5,9 @@ from utils import compute_profit, compute_to_buy
 
 def main_loop(budget, resources_group, resources, turns, T):
 
+
+    f = open("output-attenborough-mod.txt", "w")
+
     green_resources = resources_group[0]
     base_resources = resources_group[1]
     non_green_resources = resources_group[2]
@@ -43,6 +46,8 @@ def main_loop(budget, resources_group, resources, turns, T):
             # we have enough coverage
             profit = compute_profit(coverage, T_x, T_r, maintenance)
 
+            f.write(str(t) + " 0\n")
+
         else:
             
             green_efficiencies = [compute_efficiency(res, turns, T, t) for res in green_resources]
@@ -76,13 +81,16 @@ def main_loop(budget, resources_group, resources, turns, T):
             
             if not failed:
                 full_list = green_resources + base_resources + non_green_resources
+
+                stringozza = str(t) + " "
+                stringozza += str(sum(B)) + " "
                 
                 for i, b in enumerate(B):
                     if b > 0:
                         for k in range(b):
                             resources_purchased.append({
                                 'uuid': uuid,
-                                'RI': full_list[i],
+                                'RI': full_list[i]['RI'],
                                 'lifetime': 0,
                                 'turn_status': 0,
                                 'active': True,
@@ -90,11 +98,15 @@ def main_loop(budget, resources_group, resources, turns, T):
                             })
                             uuid += 1
 
-                        coverage += resources[full_list[i]]['RU'] * b
-                        purchasing_expenses += resources[full_list[i]]['RA'] * b
-                        maintenance += resources[full_list[i]]['RP'] * b
+                            stringozza += str(full_list[i]['RI']) + " "
+
+                        coverage += full_list[i]['RU'] * b
+                        purchasing_expenses += full_list[i]['RA'] * b
+                        maintenance += full_list[i]['RP'] * b
 
                 profit = compute_profit(coverage, T_x, T_r, maintenance)
+
+                f.write(stringozza + "\n")
 
 
         for res in resources_purchased:
@@ -112,11 +124,17 @@ def main_loop(budget, resources_group, resources, turns, T):
             if res['lifetime'] == resources[res['RI']]['RL']:
                 res['dead'] = True
 
-        print(f"purchased: ", purchasing_expenses)
+        print(f"purchased: ", resources_purchased)
         if failed:
             budget -= maintenance
         else:
             budget += profit - purchasing_expenses
+
+
+        print(f"Er budget è: {budget}")
+
+        if t == T - 1:
+            f.close()
             
 
 
@@ -124,7 +142,7 @@ def main_loop(budget, resources_group, resources, turns, T):
 
 if __name__ == "__main__":
 
-    file_path = "./data/0-demo.txt"
+    file_path = "./data/2-attenborough.txt"
     D, R, T, resources, turns = read_input_file(file_path)
 
     # Stampa per verifica
@@ -178,6 +196,14 @@ if __name__ == "__main__":
     for res in green_resources_sorted:
         print(res, "Efficienza:", compute_efficiency(res, turns, T, 4))
         green_efficiencies.append(compute_efficiency(res, turns, T, 0))
+
+    print("\nRisorse base ordinate per efficienza:")
+    for res in base_resources_sorted:
+        print(res, "Efficienza:", compute_efficiency(res, turns, T, 0))
+
+    print("\nRisorse Non-Green ordinate per efficienza:")
+    for res in non_green_resources_sorted:
+        print(res, "Efficienza:", compute_efficiency(res, turns, T, 0))
 
 
     # print("\nRisorse Base (X) ordinate per efficienza:")
