@@ -2,11 +2,12 @@ from read_file import read_input_file
 from sorter import sort_resources, sort_by_efficiency, compute_efficiency
 from get_data import get_data
 from utils import compute_profit, compute_to_buy
+from sorter import compute_coeff
 
 def main_loop(budget, resources_group, resources, turns, T):
 
 
-    f = open("output-attenborough-mod.txt", "w")
+    f = open("output-1-thunberg.txt", "w")
 
     green_resources = resources_group[0]
     base_resources = resources_group[1]
@@ -15,6 +16,8 @@ def main_loop(budget, resources_group, resources, turns, T):
     uuid = 0
 
     resources_purchased = []
+
+    counter_pazzo = 0
 
     for t in range(T):
 
@@ -50,31 +53,58 @@ def main_loop(budget, resources_group, resources, turns, T):
 
         else:
             
-            green_efficiencies = [compute_efficiency(res, turns, T, t) for res in green_resources]
+            # green_efficiencies = [compute_efficiency(res, turns, T, t) for res in green_resources]
+            green_efficiencies = [compute_coeff(res, turns, T, t) for res in green_resources]
             RA_list_green = [resources[res['RI']]['RA'] for res in green_resources]
             RU_list_green = [resources[res['RI']]['RU'] for res in green_resources]
+            RP_list_green = [resources[res['RI']]['RP'] for res in green_resources]
 
-            # we need to buy resources
-            B = compute_to_buy(budget, T_m, green_efficiencies, RA_list_green, RU_list_green)
+            # GUROBI
+            B = compute_to_buy(budget, T_m, T_x, green_efficiencies, RA_list_green, RU_list_green, RP_list_green, maintenance)
+            # B = compute_to_buy(budget, T_m, T_x, green_efficiencies, RA_list_green, RU_list_green)
+            # B = None
 
             if B is None:
-                base_efficiencies = [compute_efficiency(res, turns, T, t) for res in base_resources]
+                # base_efficiencies = [compute_efficiency(res, turns, T, t) for res in base_resources]
+                base_efficiencies = [compute_coeff(res, turns, T, t) for res in base_resources]
                 RA_list_base = [resources[res['RI']]['RA'] for res in base_resources]
                 RU_list_base = [resources[res['RI']]['RU'] for res in base_resources]
+                RP_list_base = [resources[res['RI']]['RP'] for res in base_resources]
 
+                # GUROBI
+                B = compute_to_buy(budget, T_m, T_x, 
+                                   green_efficiencies + base_efficiencies, 
+                                   RA_list_green + RA_list_base, 
+                                   RU_list_green + RU_list_base,
+                                   RP_list_green + RP_list_base,
+                                   maintenance)
+                
                 # we need to buy resources
-                B = compute_to_buy(budget, T_m, green_efficiencies + base_efficiencies, RA_list_green + RA_list_base, RU_list_green + RU_list_base)
+                # B = compute_to_buy(budget, T_m, T_x, 
+                #                    green_efficiencies + base_efficiencies, 
+                #                    RA_list_green + RA_list_base, 
+                #                    RU_list_green + RU_list_base)
 
                 if B is None:
-                    non_green_efficiencies = [compute_efficiency(res, turns, T, t) for res in non_green_resources]
+                    # non_green_efficiencies = [compute_efficiency(res, turns, T, t) for res in non_green_resources]
+                    non_green_efficiencies = [compute_coeff(res, turns, T, t) for res in non_green_resources]
                     RA_list_non_green = [resources[res['RI']]['RA'] for res in non_green_resources]
                     RU_list_non_green = [resources[res['RI']]['RU'] for res in non_green_resources]
+                    RP_list_non_green = [resources[res['RI']]['RP'] for res in non_green_resources]
 
-                    # we need to buy resources
-                    B = compute_to_buy(budget, T_m, 
+                    # GUROBI
+                    B = compute_to_buy(budget, T_m, T_x,
                                        green_efficiencies + base_efficiencies + non_green_efficiencies,
                                        RA_list_green + RA_list_base + RA_list_non_green,
-                                       RU_list_green + RU_list_base + RU_list_non_green)
+                                       RU_list_green + RU_list_base + RU_list_non_green,
+                                       RP_list_green + RP_list_base + RP_list_non_green,
+                                       maintenance)
+                    
+                    # we need to buy resources
+                    # B = compute_to_buy(budget, T_m, T_x,
+                    #                    green_efficiencies + base_efficiencies + non_green_efficiencies,
+                    #                    RA_list_green + RA_list_base + RA_list_non_green,
+                    #                    RU_list_green + RU_list_base + RU_list_non_green)
 
             if B is None:
                 failed = True
@@ -124,17 +154,20 @@ def main_loop(budget, resources_group, resources, turns, T):
             if res['lifetime'] == resources[res['RI']]['RL']:
                 res['dead'] = True
 
-        print(f"purchased: ", resources_purchased)
+        # print(f"purchased: ", resources_purchased)
         if failed:
             budget -= maintenance
         else:
             budget += profit - purchasing_expenses
 
-
+        if coverage < T_x :
+            counter_pazzo += 1
+        
         print(f"Er budget è: {budget}")
 
         if t == T - 1:
             f.close()
+            print(f"counter_pazzo: {counter_pazzo}")
             
 
 
@@ -142,7 +175,7 @@ def main_loop(budget, resources_group, resources, turns, T):
 
 if __name__ == "__main__":
 
-    file_path = "./data/2-attenborough.txt"
+    file_path = "./data/1-thunberg.txt"
     D, R, T, resources, turns = read_input_file(file_path)
 
     # Stampa per verifica
