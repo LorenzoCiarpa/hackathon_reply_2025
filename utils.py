@@ -1,49 +1,68 @@
-from gurobipy import Model, GRB
-
-def compute_to_buy(budget, T_m, T_x, eff, RA, RU, RP, tot_maintenance):
+from compute_input import parse_input_file
+def apply_effects(resources, turns, acquired_resources, T):
     """
-
-    Parameters:
-    - budget (int): Available budget constraint.
-    - T_m (int): Minimum required resource constraint.
-    - eff (list): List of efficiency coefficients.
-    - RA (list): List of resource allocation costs.
-    - RU (list): List of resource usages.
-
-    Returns:
-    - list: Optimal values of x_r ore none if no feasible solution.
+    Applica gli effetti speciali delle risorse agli input del modello,
+    considerando tutte le risorse attive in ogni turno.
     """
-    R = range(len(eff))  # Set of items
+    modified_turns = turns.copy()
+    modified_resources = resources.copy()
+    accumulator_capacity = 0  # Capacità dell'accumulatore
 
-    # Create Gurobi model
-    model = Model("OptimizationProblem")
-    model.setParam('OutputFlag', 0)  # Disable output
+    # Struttura per tracciare le risorse attive
+    active_resources = {t: [] for t in range(T)}
 
-    # Define variables: x_r ∈ Z+ (integer variables)
-    x = model.addVars(R, vtype=GRB.INTEGER, name="x")
+    #innanzitutto cicla e considera 
 
-    # Set objective: Maximize sum(eff_r * x_r)
-    model.setObjective(sum(eff[r] * x[r] for r in R), GRB.MAXIMIZE)
-    # model.setObjective(sum(RA[r] * x[r] for r in R), GRB.MINIMIZE)
+    # Costruire la lista di risorse attive per ogni turno
+    for t in range(T):
+        # Aggiungere le risorse acquistate nei turni precedenti che sono ancora in vita
+        for past_t in range(max(0, t - max(resources[r]["RL"] for r in resources)), t + 1):
+            if past_t in acquired_resources:
+                for r in acquired_resources[past_t]:
+                    RL = resources[r]["RL"]
+                    if t < past_t + RL:  # La risorsa è ancora in vita
+                        active_resources[t].append(r)
 
-    # Constraints
-    model.addConstr(sum(x[r] * RA[r] for r in R) <= budget - tot_maintenance - sum(x[r] * RP[r] for r in R), "BudgetConstraint")
-    model.addConstr(sum(x[r] * RU[r] for r in R) >= T_m, "ResourceUsageConstraint")
-    model.addConstr(sum(x[r] * RU[r] for r in R) <= T_x, "ResourceUsageConstraint")
-    model.addConstr(sum(x[r] for r in R) <= 50, "ItemLimitConstraint")
-    # for r in R:
-    #     model.addConstr(x[r] <= sum(x[r_] for r_ in R if r_ != r), "variabilita")
+        # Effetti accumulati
+        effect_A = 1.0  # Modifica RU (numero di edifici alimentati)
+        effect_B = 1.0  # Modifica TM e TX
+        effect_C = {}   # Modifica RL per ogni risorsa
+        effect_D = 1.0  # Modifica TR
+        temp_accumulator = 0  # Per accumulo dell'effetto E
 
+        for r in active_resources[t]:
+            effect = resources[r]["RT"]
+            effect_value = resources[r]["RE"]
 
-    # Solve the model
-    model.optimize()
+            if effect == "A" and effect_value:
+                effect_A *= (1 + effect_value / 100)  # Incrementa RU del r%
 
-    # Extract the solution
-    if model.status == GRB.OPTIMAL:
-        return [int(x[r].x) for r in R]
-    else:
-        return None  # No feasible solution
+            if effect == "B" and effect_value:
+                effect_B *= (1 + effect_value / 100)  # Incrementa TM e TX del t%
 
-def compute_profit(coverage, T_x, T_r, maintenance):
-    revenue = min(coverage, T_x) * T_r
-    return  revenue - maintenance
+            if effect == "C" and effect_value:
+                effect_C[r] = (1 + effect_value / 100)  # Incrementa RL del r%
+
+            if effect == "D" and effect_value:
+                effect_D *= (1 + effect_value / 100)  # Incrementa TR del t%
+
+            if effect == "E":
+                temp_accumulator += effect_value  # Incrementa capacità dell'accumulatore
+
+        # Applicare gli effetti per il turno corrente
+        modified_turns[t]["TM"] = int(turns[t]["TM"] * effect_B)
+        modified_turns[t]["TX"] = int(turns[t]["TX"] * effect_B)
+        modified_turns[t]["TR"] = int(turns[t]["TR"] * effect_D)
+
+        # Modifica RU per ogni risorsa con effetto A
+        for r in resources:
+            modified_resources[r]["RU"] = int(resources[r]["RU"] * effect_A)
+
+        # Modifica RL per ogni risorsa con effetto C
+        for r in effect_C:
+            modified_resources[r]["RL"] = int(resources[r]["RL"] * effect_C[r])
+
+        # Aggiornare capacità dell'accumulatore
+        accumulator_capacity += temp_accumulator
+
+    return modified_resources, modified_turns, accumulator_capacity
